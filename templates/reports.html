@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}历史报告{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <h1><i class="fas fa-history"></i> 审计报告查询</h1>
+        <p class="subtitle">查看历史扫描记录与 SARIF 报告</p>
+    </div>
+
+    <div class="card">
+        <!-- 只是一个静态表格示例，展示未来结构 -->
+        <table class="audit-table">
+            <thead>
+                <tr>
+                    <th>任务 ID</th>
+                    <th>项目名称</th>
+                    <th>语言</th>
+                    <th>扫描时间</th>
+                    <th>漏洞数</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>#1024</td>
+                    <td>demo-project.zip</td>
+                    <td>Python</td>
+                    <td>2023-11-24 10:30</td>
+                    <td><span class="badge badge-error">5</span></td>
+                    <td><button class="btn btn-sm btn-primary">查看</button></td>
+                </tr>
+                <tr>
+                    <td colspan="6" style="text-align:center; color:#999; padding: 20px;">
+                        暂无更多历史记录 (后端接口待对接)
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
