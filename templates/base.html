@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}CodeQL 审计平台{% endblock %}</title>
+    <!-- 这里预留了 CSS 的位置，下一阶段我们通过 style.css 来控制样式 -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- 引入 FontAwesome 图标库 (可选，为了美观) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+
+    <!-- ================= 顶部导航栏 ================= -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="/" class="nav-logo">
+                <i class="fas fa-shield-alt"></i> CodeQL Audit
+            </a>
+            <ul class="nav-menu">
+                <!-- 这里的 active 类通过简单的逻辑判断是否高亮当前页面 -->
+                <li><a href="/" class="{% if request.path == '/' %}active{% endif %}">代码审计</a></li>
+                <li><a href="/generator" class="{% if request.path == '/generator' %}active{% endif %}">QL 规则生成</a></li>
+                <li><a href="/reports" class="{% if request.path == '/reports' %}active{% endif %}">审计报告</a></li>
+                <li><a href="/profile" class="{% if request.path == '/profile' %}active{% endif %}">个人中心</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- ================= 主内容区域 ================= -->
+    <main class="main-content">
+        <!-- 子页面将把内容填入这里 -->
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- ================= 页脚 ================= -->
+    <footer class="footer">
+        <p>&copy; 2025 CodeQL Security Audit System. All rights reserved.</p>
+    </footer>
+
+    <!-- 预留 JS 位置 -->
+    {% block scripts %}{% endblock %}
+</body>
+</html>

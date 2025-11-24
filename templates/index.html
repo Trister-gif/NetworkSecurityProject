@@ -1,94 +1,118 @@
-<!-- templates/index.html -->
-<!doctype html>
-<html lang="zh-CN">
-<head>
-  <meta charset="utf-8" />
-  <title>CodeQL 本地分析器</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <style>
-    body { font-family: Arial, Helvetica, sans-serif; margin: 24px; max-width: 900px; }
-    h1 { margin-bottom: 6px; }
-    .card { border: 1px solid #eee; padding: 16px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.03); }
-    label { display:block; margin-top:12px; }
-    select,input[type=file] { width:100%; padding:8px; margin-top:6px; }
-    button { margin-top:12px; padding:10px 16px; }
-    #spinner { display:none; margin-top:12px; }
-    table { width:100%; border-collapse:collapse; margin-top:12px; }
-    table th, table td { border:1px solid #ddd; padding:8px; font-size:13px; }
-    .level-info { color: #2c7; }
-    .level-error { color: #d33; }
-    .level-warning { color: #f60; }
-    .small { font-size:12px; color:#666; }
-    .download { margin-top:10px; display:inline-block; }
-    #log { white-space:pre-wrap; background:#111; color:#0f0; padding:8px; margin-top:12px; display:none; max-height:240px; overflow:auto; }
-  </style>
-</head>
-<body>
-  <h1>🔒 CodeQL 本地代码安全分析</h1>
+{% extends "base.html" %}
 
-  <div class="card">
-    <form id="analyzeForm">
-      <label>① 选择语言
-        <select name="language" id="language">
-          <option value="java">Java</option>
-          <option value="python">Python</option>
-          <option value="javascript">JavaScript</option>
-          <option value="cpp">C / C++</option>
-          <option value="csharp">C#</option>
-        </select>
-      </label>
+{% block title %}首页 - 代码审计{% endblock %}
 
-      <label>② 选择查询套件
-        <select name="suite" id="suite">
-          <!-- 常用两个，后端也支持传入完整 .qls 路径 -->
-          <option value="code-scanning">code-scanning</option>
-          <option value="security-and-quality">security-and-quality</option>
-        </select>
-      </label>
-
-      <label>③ 上传文件
-        <input type="file" name="file" id="file" />
-      </label>
-
-      <button type="submit">开始分析</button>
-      <div id="spinner">⏳ 正在分析，请稍候...</div>
-    </form>
-
-    <div id="resultArea" style="display:none;">
-      <div class="small" id="statusMsg"></div>
-      <a id="downloadLink" class="download" href="#" download>下载 SARIF</a>
-      <table id="resultsTable">
-        <thead>
-          <tr><th>规则</th><th>严重性</th><th>文件</th><th>行</th><th>消息</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-
-      <button id="showLogBtn">显示/隐藏 调试日志</button>
-      <div id="log"></div>
+{% block content %}
+<div class="container">
+    <!-- 欢迎/标题区 -->
+    <div class="page-header">
+        <h1><i class="fas fa-code"></i> 开始新的代码审计</h1>
+        <p class="subtitle">上传源代码包，自动化检测安全漏洞</p>
     </div>
-  </div>
 
-  <script>
+    <!-- 审计配置卡片 -->
+    <div class="audit-card">
+        <form id="analyzeForm">
+            <div class="form-grid">
+                <!-- 选项 1 -->
+                <div class="form-group">
+                    <label for="language"><i class="fas fa-language"></i> 目标语言</label>
+                    <select name="language" id="language" class="form-control">
+                        <option value="python">Python</option>
+                        <option value="java">Java</option>
+                        <option value="javascript">JavaScript / TypeScript</option>
+                        <option value="cpp">C / C++</option>
+                        <option value="csharp">C#</option>
+                        <option value="go">Go</option>
+                    </select>
+                </div>
+
+                <!-- 选项 2 -->
+                <div class="form-group">
+                    <label for="suite"><i class="fas fa-cubes"></i> 查询规则集</label>
+                    <select name="suite" id="suite" class="form-control">
+                        <option value="security-and-quality">Security & Quality (推荐)</option>
+                        <option value="code-scanning">Code Scanning (快速)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 文件上传区 -->
+            <div class="upload-area" id="dropZone">
+                <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                <p>点击上传或拖拽 ZIP/源码文件到此处</p>
+                <input type="file" name="file" id="file" class="file-input">
+                <div id="fileNameDisplay"></div>
+            </div>
+
+            <!-- 提交按钮 -->
+            <button type="submit" class="btn btn-primary btn-lg btn-block">
+                <i class="fas fa-play"></i> 启动分析引擎
+            </button>
+        </form>
+
+        <!-- 加载状态 -->
+        <div id="spinner" class="loading-state" style="display:none;">
+            <div class="spinner-icon"></div>
+            <p>正在构建数据库并分析漏洞，请耐心等待...</p>
+        </div>
+    </div>
+
+    <!-- 结果展示区 -->
+    <div id="resultArea" class="result-card" style="display:none;">
+        <div class="result-header">
+            <h2>审计结果</h2>
+            <div class="result-actions">
+                <span id="statusMsg"></span>
+                <a id="downloadLink" href="#" class="btn btn-secondary btn-sm" download>
+                    <i class="fas fa-download"></i> 下载 SARIF 报告
+                </a>
+            </div>
+        </div>
+        
+        <div class="table-responsive">
+            <table id="resultsTable" class="audit-table">
+                <thead>
+                    <tr>
+                        <th width="15%">规则 ID</th>
+                        <th width="10%">严重性</th>
+                        <th width="30%">文件路径</th>
+                        <th width="10%">行号</th>
+                        <th width="35%">详细信息</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- JS 将在这里插入数据 -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- 这里我们将引入原本 index.html 下方的 JS 逻辑 -->
+<!-- 为了保持整洁，建议之后将 JS 移入 static/script.js，但现在先保留在 HTML 里 -->
+<script>
+    // 简单的文件上传文件名显示逻辑
+    document.getElementById('file').addEventListener('change', function(e){
+        const fileName = e.target.files[0]?.name;
+        if(fileName) document.getElementById('fileNameDisplay').textContent = "已选择: " + fileName;
+    });
+
+    // === 原有的 AJAX 逻辑 (适配了新的 Class/ID) ===
     const form = document.getElementById("analyzeForm");
     const spinner = document.getElementById("spinner");
     const resultArea = document.getElementById("resultArea");
     const tableBody = document.querySelector("#resultsTable tbody");
     const statusMsg = document.getElementById("statusMsg");
     const downloadLink = document.getElementById("downloadLink");
-    const logDiv = document.getElementById("log");
-    const showLogBtn = document.getElementById("showLogBtn");
-
-    showLogBtn.addEventListener("click", ()=> {
-      logDiv.style.display = logDiv.style.display === "none" ? "block" : "none";
-    });
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       resultArea.style.display = "none";
       tableBody.innerHTML = "";
       statusMsg.textContent = "";
-      logDiv.textContent = "";
 
       const fileInput = document.getElementById("file");
       if (!fileInput.files.length) {
@@ -99,7 +123,6 @@
       spinner.style.display = "block";
       const fd = new FormData();
       fd.append("language", document.getElementById("language").value);
-      fd.append("suite", document.getElementById("suite").value);
       fd.append("file", fileInput.files[0]);
 
       try {
@@ -108,42 +131,35 @@
         spinner.style.display = "none";
 
         if (!resp.ok) {
-          resultArea.style.display = "block";
-          statusMsg.textContent = "❌ 分析失败，请查看日志";
-          logDiv.style.display = "block";
-          logDiv.textContent = JSON.stringify(data, null, 2);
+          alert("错误: " + (data.message || "分析失败"));
           return;
         }
 
         // success
         resultArea.style.display = "block";
-        statusMsg.textContent = "✅ 分析完成，可下载结果：";
+        statusMsg.textContent = `✅ 发现 ${data.results.length} 个潜在问题`;
         downloadLink.href = "/results/" + data.sarif_file;
-        downloadLink.textContent = "下载 SARIF";
-        downloadLink.style.display = "inline-block";
 
         // fill table
         tableBody.innerHTML = "";
         for (const r of data.results || []) {
           const tr = document.createElement("tr");
-          const levelClass = r.level && r.level.toLowerCase().includes("error") ? "level-error" :
-                             r.level && r.level.toLowerCase().includes("warn") ? "level-warning" : "level-info";
-          tr.innerHTML = `<td>${escapeHtml(r.rule)}</td>
-                          <td class="${levelClass}">${escapeHtml(r.level)}</td>
-                          <td>${escapeHtml(r.file)}</td>
+          // 适配不同等级的颜色
+          const levelLower = (r.level || r.severity || "").toLowerCase();
+          let badgeClass = "badge-info";
+          if (levelLower.includes("error")) badgeClass = "badge-error";
+          if (levelLower.includes("warn")) badgeClass = "badge-warning";
+
+          tr.innerHTML = `<td><span class="code-font">${escapeHtml(r.rule)}</span></td>
+                          <td><span class="badge ${badgeClass}">${escapeHtml(r.level || r.severity)}</span></td>
+                          <td><span class="file-path" title="${escapeHtml(r.file)}">${escapeHtml(r.file)}</span></td>
                           <td>${escapeHtml(r.line)}</td>
                           <td>${escapeHtml(r.message)}</td>`;
           tableBody.appendChild(tr);
         }
-
-        // show debug SARIF name or other info
-        logDiv.textContent = "返回数据：\n" + JSON.stringify(data, null, 2);
       } catch (err) {
         spinner.style.display = "none";
-        resultArea.style.display = "block";
-        statusMsg.textContent = "❌ 网络或服务器错误";
-        logDiv.style.display = "block";
-        logDiv.textContent = String(err);
+        alert("网络错误: " + err);
       }
     });
 
@@ -151,6 +167,5 @@
       if (!s && s !== 0) return "";
       return String(s).replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]; });
     }
-  </script>
-</body>
-</html>
+</script>
+{% endblock %}

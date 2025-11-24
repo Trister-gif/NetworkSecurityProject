@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}个人中心{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="profile-layout">
+        <div class="card profile-card">
+            <div class="profile-header">
+                <div class="avatar"><i class="fas fa-user"></i></div>
+                <h2>Admin User</h2>
+                <p>Security Researcher</p>
+            </div>
+            <hr>
+            <div class="profile-info">
+                <p><strong>CodeQL 路径:</strong> <span class="code-font">/usr/local/bin/codeql</span></p>
+                <p><strong>规则库版本:</strong> v2.15.3</p>
+            </div>
+            <button class="btn btn-secondary btn-block">注销</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+```
+
+---
+
+### 6. 更新 `app.py` 的路由
+**这一步非常关键**。你需要修改 `app.py` 尾部的路由部分，让 Flask 知道如何跳转到这几个新页面。
+
+请在 `app.py` 中找到 `@app.route("/")` 附近，添加以下代码：
+
+```python
+# =================== 路由 (更新版) ===================
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+@app.route("/generator")
+def generator():
+    return render_template("generator.html")
+
+@app.route("/reports")
+def reports():
+    return render_template("reports.html")
+
+@app.route("/profile")
+def profile():
+    return render_template("profile.html")
