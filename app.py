@@ -5,6 +5,7 @@ import subprocess
 import json
 from flask import Flask, request, jsonify, send_from_directory, render_template
 from flask_cors import CORS
+import time 
 
 # =================== 全局配置 (macOS/Linux 适配版) ===================
 
@@ -139,6 +140,8 @@ def run_codeql_analysis(src_dir, lang):
             raise Exception(f"数据库创建失败: {err}\n{out}")
             
     # 2. 分析数据库
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    project_name = os.path.basename(src_dir)
     result_filename = f"result_{os.path.basename(src_dir)}_{lang}.sarif"
     result_path = os.path.join(RESULT_DIR, result_filename)
     
@@ -291,6 +294,115 @@ def analyze():
 @app.route("/results/<path:filename>")
 def download(filename):
     return send_from_directory(RESULT_DIR, filename, as_attachment=True)
+
+
+@app.route("/api/history")
+def get_history():
+    """获取历史报告列表"""
+    reports = []
+    if not os.path.exists(RESULT_DIR):
+        return jsonify(reports)
+    
+    # 按修改时间倒序排列 (最新的在最前)
+    files = sorted(os.listdir(RESULT_DIR), key=lambda x: os.path.getmtime(os.path.join(RESULT_DIR, x)), reverse=True)
+    
+    for f in files:
+        if f.endswith(".sarif"):
+            path = os.path.join(RESULT_DIR, f)
+            # 尝试从文件名解析信息: result_20231124_103000_demo_python.sarif
+            try:
+                parts = f.split("_")
+                # parts[0]="result", parts[1]=date, parts[2]=time, parts[3]=name, parts[4]=lang.sarif
+                date_str = f"{parts[1][0:4]}-{parts[1][4:6]}-{parts[1][6:8]} {parts[2][0:2]}:{parts[2][2:4]}"
+                lang = parts[-1].replace(".sarif", "")
+                name = "_".join(parts[3:-1]) # 处理项目名中包含下划线的情况
+            except:
+                date_str = "Unknown"
+                name = f
+                lang = "-"
+            
+            # 简单读取一下文件大小，具体的漏洞数量因为要解析JSON太慢，我们点击详情时再加载
+            size = os.path.getsize(path) / 1024 # KB
+            
+            reports.append({
+                "filename": f,
+                "project": name,
+                "date": date_str,
+                "language": lang,
+                "size": f"{size:.1f} KB"
+            })
+    return jsonify(reports)
+
+@app.route("/api/report_detail/<path:filename>")
+def get_report_detail(filename):
+    """读取并解析特定报告"""
+    try:
+        path = os.path.join(RESULT_DIR, filename)
+        if not os.path.exists(path):
+            return jsonify({"error": "File not found"}), 404
+        
+        # 复用之前的解析函数
+        results = parse_sarif(path)
+        return jsonify({
+            "status": "ok", 
+            "filename": filename,
+            "results": results,
+            "count": len(results)
+        })
+    except Exception as e:
+           return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route("/api/stats")
+def get_dashboard_stats():
+    stats = {
+        "total_scans": 0,
+        "total_vulns": 0,
+        "severity_dist": {"error": 0, "warning": 0, "note": 0},
+        "top_vulns": {} # {"rule_id": count}
+    }
+    
+    if not os.path.exists(RESULT_DIR):
+        return jsonify(stats)
+    
+    files = [f for f in os.listdir(RESULT_DIR) if f.endswith(".sarif")]
+    stats["total_scans"] = len(files)
+    
+    for f in files:
+        path = os.path.join(RESULT_DIR, f)
+        try:
+            # 复用现有的解析逻辑，虽然效率一般但够用
+            results = parse_sarif(path)
+            # 如果解析结果是空的或者只有"未发现问题"的占位符，跳过
+            if len(results) == 1 and results[0].get("rule") == "完成":
+                continue
+                
+            stats["total_vulns"] += len(results)
+            
+            for r in results:
+                # 统计严重性
+                level = r.get("level", "warning").lower()
+                if "error" in level: stats["severity_dist"]["error"] += 1
+                elif "warn" in level: stats["severity_dist"]["warning"] += 1
+                else: stats["severity_dist"]["note"] += 1
+                
+                # 统计漏洞类型 (Rule ID)
+                # 截取规则名的最后一部分让图表更简洁 (例如 'python/sql-injection' -> 'sql-injection')
+                rule_name = r.get("rule", "unknown").split("/")[-1]
+                stats["top_vulns"][rule_name] = stats["top_vulns"].get(rule_name, 0) + 1
+                
+        except Exception:
+            pass # 忽略损坏的文件
+
+    # 整理 Top 5 漏洞数据用于前端柱状图
+    # 按数量降序排列
+    sorted_vulns = sorted(stats["top_vulns"].items(), key=lambda x: x[1], reverse=True)[:5]
+    stats["top_vulns_chart"] = {
+        "labels": [item[0] for item in sorted_vulns],
+        "data": [item[1] for item in sorted_vulns]
+    }
+    del stats["top_vulns"] # 删除原始大字典节省流量
+    
+    return jsonify(stats)
 
 if __name__ == "__main__":
     print(f"[INFO] Server starting... CodeQL binary: {CODEQL_BIN}")

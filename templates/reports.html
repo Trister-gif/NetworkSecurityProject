@@ -1,43 +1,258 @@
 {% extends "base.html" %}
 
-{% block title %}历史报告{% endblock %}
+{% block title %}审计报告查询{% endblock %}
 
 {% block content %}
 <div class="container">
-    <div class="page-header">
-        <h1><i class="fas fa-history"></i> 审计报告查询</h1>
-        <p class="subtitle">查看历史扫描记录与 SARIF 报告</p>
+    
+    <!-- 1. 历史列表视图 (History List View) -->
+    <div id="historyView">
+        <div class="page-header">
+            <h1><i class="fas fa-history"></i> 审计历史档案</h1>
+            <p class="subtitle">查看过往的代码安全扫描记录</p>
+        </div>
+
+        <div class="card">
+            <div class="table-responsive">
+                <table class="audit-table" id="historyTable">
+                    <thead>
+                        <tr>
+                            <th>扫描时间</th>
+                            <th>项目名称</th>
+                            <th>语言</th>
+                            <th>文件大小</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td colspan="5" style="text-align:center;">正在加载历史记录...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
-    <div class="card">
-        <!-- 只是一个静态表格示例，展示未来结构 -->
-        <table class="audit-table">
-            <thead>
-                <tr>
-                    <th>任务 ID</th>
-                    <th>项目名称</th>
-                    <th>语言</th>
-                    <th>扫描时间</th>
-                    <th>漏洞数</th>
-                    <th>操作</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>#1024</td>
-                    <td>demo-project.zip</td>
-                    <td>Python</td>
-                    <td>2023-11-24 10:30</td>
-                    <td><span class="badge badge-error">5</span></td>
-                    <td><button class="btn btn-sm btn-primary">查看</button></td>
-                </tr>
-                <tr>
-                    <td colspan="6" style="text-align:center; color:#999; padding: 20px;">
-                        暂无更多历史记录 (后端接口待对接)
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+    <!-- 2. 报告详情视图 (Detail View) - 默认隐藏 -->
+    <div id="detailView" style="display:none;">
+        <div class="action-bar mb-3">
+            <button class="btn btn-secondary" onclick="showHistory()">
+                <i class="fas fa-arrow-left"></i> 返回列表
+            </button>
+            <h2 id="detailTitle" style="display:inline-block; margin-left: 15px;">报告详情</h2>
+        </div>
+
+        <!-- 概览卡片 -->
+        <div class="card mb-3">
+            <div class="detail-summary">
+                <div class="stat-item">
+                    <span class="stat-label">漏洞总数</span>
+                    <span class="stat-value level-error" id="vulnCount">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">项目</span>
+                    <span class="stat-value" id="vulnProject">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">SARIF 文件</span>
+                    <span class="stat-value small-text" id="vulnFile">-</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 漏洞详情表格 -->
+        <div class="card">
+            <h3><i class="fas fa-bug"></i> 漏洞清单</h3>
+            <table class="audit-table" id="detailTable">
+                <thead>
+                    <tr>
+                        <th>规则类型</th>
+                        <th>严重性</th>
+                        <th>位置</th>
+                        <th>消息</th>
+                        <th>AI 解读</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<!-- 3. AI Copilot 悬浮窗 -->
+<div id="aiChatWidget" class="ai-widget closed">
+    <!-- 头部 -->
+    <div class="ai-header" onclick="toggleAiChat()">
+        <span><i class="fas fa-robot"></i> 审计助手 Copilot</span>
+        <i class="fas fa-chevron-up" id="toggleIcon"></i>
+    </div>
+    
+    <!-- 聊天内容区 -->
+    <div class="ai-body">
+        <div class="chat-messages" id="chatBox">
+            <div class="message ai-message">
+                你好！我是你的安全审计助手。你可以问我关于这份报告的任何问题，例如：“这份报告里最危险的漏洞是什么？”
+            </div>
+        </div>
+        
+        <!-- 输入区 -->
+        <div class="chat-input-area">
+            <input type="text" id="chatInput" placeholder="输入问题..." onkeypress="handleEnter(event)">
+            <button class="btn btn-sm btn-primary" onclick="sendMessage()"><i class="fas fa-paper-plane"></i></button>
+        </div>
     </div>
 </div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // === 页面加载：获取历史列表 ===
+    document.addEventListener("DOMContentLoaded", loadHistory);
+
+    async function loadHistory() {
+        const tbody = document.querySelector("#historyTable tbody");
+        try {
+            const resp = await fetch("/api/history");
+            const data = await resp.json();
+            
+            tbody.innerHTML = "";
+            if (data.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">暂无历史记录</td></tr>`;
+                return;
+            }
+
+            data.forEach(item => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td>${item.date}</td>
+                    <td><strong>${item.project}</strong></td>
+                    <td><span class="badge badge-info">${item.language}</span></td>
+                    <td>${item.size}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="openReport('${item.filename}')">
+                            <i class="fas fa-eye"></i> 查看详情
+                        </button>
+                        <a href="/results/${item.filename}" class="btn btn-sm btn-secondary" title="下载原始文件">
+                            <i class="fas fa-download"></i>
+                        </a>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="5" style="color:red;">加载失败: ${e}</td></tr>`;
+        }
+    }
+
+    // === 切换视图逻辑 ===
+    const historyView = document.getElementById("historyView");
+    const detailView = document.getElementById("detailView");
+    const aiWidget = document.getElementById("aiChatWidget");
+
+    function showHistory() {
+        detailView.style.display = "none";
+        historyView.style.display = "block";
+        aiWidget.classList.add("closed"); // 回到列表时收起 AI
+    }
+
+    async function openReport(filename) {
+        // 1. 切换视图
+        historyView.style.display = "none";
+        detailView.style.display = "block";
+        
+        // 2. 加载详情
+        document.getElementById("detailTitle").innerText = "加载中...";
+        document.getElementById("detailTable").querySelector("tbody").innerHTML = "";
+        
+        try {
+            const resp = await fetch(`/api/report_detail/${filename}`);
+            const data = await resp.json();
+            
+            if(data.status !== "ok") throw new Error(data.message);
+
+            // 3. 渲染概览
+            document.getElementById("detailTitle").innerText = "报告详情: " + filename;
+            document.getElementById("vulnCount").innerText = data.count;
+            document.getElementById("vulnProject").innerText = filename.split("_")[3] || "Unknown";
+            document.getElementById("vulnFile").innerText = filename;
+
+            // 4. 渲染表格
+            const tbody = document.getElementById("detailTable").querySelector("tbody");
+            data.results.forEach(r => {
+                const tr = document.createElement("tr");
+                const levelClass = r.level && r.level.includes("error") ? "level-error" : "level-warning";
+                
+                tr.innerHTML = `
+                    <td>${r.rule}</td>
+                    <td class="${levelClass}">${r.level || "warning"}</td>
+                    <td class="small-text">${r.file}:${r.line}</td>
+                    <td>${r.message}</td>
+                    <td>
+                        <button class="btn btn-sm btn-ghost" onclick="askAiExplain('${escapeHtml(r.message)}', '${escapeHtml(r.rule)}')">
+                            <i class="fas fa-magic"></i> 解释
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // 5. 自动展开 AI 助手
+            aiWidget.classList.remove("closed");
+
+        } catch (e) {
+            alert("加载报告失败: " + e);
+            showHistory();
+        }
+    }
+
+    function escapeHtml(text) {
+        if (!text) return "";
+        return text.replace(/'/g, "\\'"); // 简单转义单引号防止 JS 报错
+    }
+
+    // === AI 聊天逻辑 ===
+    function toggleAiChat() {
+        aiWidget.classList.toggle("closed");
+        const icon = document.getElementById("toggleIcon");
+        icon.className = aiWidget.classList.contains("closed") ? "fas fa-chevron-up" : "fas fa-chevron-down";
+    }
+
+    function handleEnter(e) {
+        if (e.key === "Enter") sendMessage();
+    }
+
+    function sendMessage() {
+        const input = document.getElementById("chatInput");
+        const text = input.value.trim();
+        if (!text) return;
+
+        addMessage("user", text);
+        input.value = "";
+
+        // 模拟 AI 回复 (后续对接真实 API)
+        addMessage("ai", "正在分析报告内容...");
+        setTimeout(() => {
+            const reply = "（模拟回复）根据 SARIF 数据，这个漏洞属于 SQL 注入类别。建议使用参数化查询来修复。";
+            // 移除最后一个“正在分析”的消息，换成真实回复 (简化处理直接追加)
+            addMessage("ai", reply);
+        }, 1500);
+    }
+
+    function askAiExplain(msg, rule) {
+        const query = `请解释一下这个漏洞：规则 [${rule}]，具体信息是 "${msg}"。它有什么危害？`;
+        if (aiWidget.classList.contains("closed")) toggleAiChat();
+        document.getElementById("chatInput").value = query;
+        sendMessage();
+    }
+
+    function addMessage(role, text) {
+        const box = document.getElementById("chatBox");
+        const div = document.createElement("div");
+        div.className = `message ${role}-message`;
+        div.innerText = text;
+        box.appendChild(div);
+        box.scrollTop = box.scrollHeight;
+    }
+</script>
 {% endblock %}

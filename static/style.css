@@ -1,4 +1,7 @@
 /* ================== 全局重置 ================== */
+.footer{
+    padding: 0px 0px 0px 10px;
+}
 :root {
     --primary-color: #2c3e50;    /* 深岩灰 - 导航栏背景 */
     --accent-color: #3498db;     /* 亮蓝 - 按钮和高亮 */
@@ -545,4 +548,219 @@ ul { list-style: none; }
     0% { opacity: 1; }
     50% { opacity: 0.3; }
     100% { opacity: 1; }
+}
+
+/* ============================================
+   AI Copilot 悬浮窗样式
+   ============================================
+*/
+.ai-widget {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 350px;
+    height: 500px;
+    background-color: white;
+    box-shadow: 0 -5px 25px rgba(0,0,0,0.15);
+    border-radius: 12px 12px 0 0;
+    display: flex;
+    flex-direction: column;
+    z-index: 1000;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid #ddd;
+}
+
+/* 收起状态：只显示头部 */
+.ai-widget.closed {
+    transform: translateY(450px); /* 向下移动，只留头部 */
+}
+
+.ai-header {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 15px;
+    border-radius: 10px 10px 0 0;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+}
+
+.ai-header:hover {
+    background-color: #34495e;
+}
+
+.ai-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: #f8f9fa;
+}
+
+.chat-messages {
+    flex: 1;
+    padding: 15px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.message {
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    max-width: 85%;
+    line-height: 1.4;
+}
+
+.ai-message {
+    background-color: white;
+    border: 1px solid #eee;
+    align-self: flex-start;
+    color: #333;
+}
+
+.user-message {
+    background-color: var(--accent-color);
+    color: white;
+    align-self: flex-end;
+}
+
+.chat-input-area {
+    padding: 10px;
+    border-top: 1px solid #ddd;
+    background-color: white;
+    display: flex;
+    gap: 8px;
+}
+
+.chat-input-area input {
+    flex: 1;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 8px;
+    outline: none;
+}
+
+.chat-input-area input:focus {
+    border-color: var(--accent-color);
+}
+
+/* 详情页概览统计样式 */
+.detail-summary {
+    display: flex;
+    justify-content: space-around;
+    text-align: center;
+}
+.stat-item {
+    display: flex;
+    flex-direction: column;
+}
+.stat-label {
+    font-size: 0.85rem;
+    color: #888;
+    margin-bottom: 5px;
+}
+.stat-value {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #333;
+}
+
+/* ============================================
+   Profile (Dashboard) 页面专用样式
+   ============================================
+*/
+
+/* 1. 顶部数据统计卡片网格 */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-card {
+    display: flex;
+    align-items: center;
+    padding: 25px;
+}
+
+.stat-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    margin-right: 20px;
+    flex-shrink: 0;
+}
+
+.icon-blue { background-color: #e3f2fd; color: #3498db; }
+.icon-red { background-color: #ffebee; color: #e74c3c; }
+.icon-green { background-color: #e8f5e9; color: #2ecc71; }
+
+.stat-content h3 {
+    font-size: 0.9rem;
+    color: #7f8c8d;
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+
+.stat-content p {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #2c3e50;
+    line-height: 1;
+}
+
+/* 2. 图表区域布局 */
+.charts-row {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr; /* 左小右大 */
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+/* 移动端适配：屏幕变窄变成单列 */
+@media (max-width: 768px) {
+    .charts-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+.chart-card h3 {
+    margin-bottom: 20px;
+    font-size: 1.1rem;
+    color: #34495e;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+}
+
+.chart-container {
+    position: relative;
+    height: 300px; /* 固定高度，确保图表不塌陷 */
+    width: 100%;
+}
+
+/* 3. 底部导出卡片 */
+.export-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    color: white;
+}
+
+.export-content h3 {
+    color: white;
+    margin-bottom: 5px;
+}
+.export-content p {
+    color: rgba(255,255,255,0.8);
+    font-size: 0.9rem;
 }

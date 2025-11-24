@@ -1,49 +1,149 @@
 {% extends "base.html" %}
 
-{% block title %}个人中心{% endblock %}
+{% block title %}个人中心 - 安全概览{% endblock %}
 
 {% block content %}
 <div class="container">
-    <div class="profile-layout">
-        <div class="card profile-card">
-            <div class="profile-header">
-                <div class="avatar"><i class="fas fa-user"></i></div>
-                <h2>Admin User</h2>
-                <p>Security Researcher</p>
+    <div class="page-header">
+        <h1><i class="fas fa-chart-line"></i> 安全态势仪表盘</h1>
+        <p class="subtitle">您的代码审计综合分析报告</p>
+    </div>
+
+    <!-- 1. 顶部数据卡片 -->
+    <div class="stats-grid">
+        <div class="card stat-card">
+            <div class="stat-icon icon-blue"><i class="fas fa-history"></i></div>
+            <div class="stat-content">
+                <h3>累计扫描</h3>
+                <p id="totalScans">-</p>
             </div>
-            <hr>
-            <div class="profile-info">
-                <p><strong>CodeQL 路径:</strong> <span class="code-font">/usr/local/bin/codeql</span></p>
-                <p><strong>规则库版本:</strong> v2.15.3</p>
+        </div>
+        <div class="card stat-card">
+            <div class="stat-icon icon-red"><i class="fas fa-bug"></i></div>
+            <div class="stat-content">
+                <h3>发现漏洞总数</h3>
+                <p id="totalVulns">-</p>
             </div>
-            <button class="btn btn-secondary btn-block">注销</button>
+        </div>
+        <div class="card stat-card">
+            <div class="stat-icon icon-green"><i class="fas fa-shield-alt"></i></div>
+            <div class="stat-content">
+                <h3>安全评分</h3>
+                <p id="securityScore">计算中...</p>
+            </div>
         </div>
     </div>
+
+    <!-- 2. 图表区域 -->
+    <div class="charts-row">
+        <!-- 左侧：漏洞分布 (饼图) -->
+        <div class="card chart-card">
+            <h3><i class="fas fa-adjust"></i> 漏洞严重性分布</h3>
+            <div class="chart-container">
+                <canvas id="severityChart"></canvas>
+            </div>
+        </div>
+        
+        <!-- 右侧：高频漏洞 Top 5 (柱状图) -->
+        <div class="card chart-card">
+            <h3><i class="fas fa-sort-amount-up"></i> 高频漏洞 Top 5</h3>
+            <div class="chart-container">
+                <canvas id="vulnTypeChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. 下载报告入口 (预留) -->
+    <div class="card export-card">
+        <div class="export-content">
+            <h3><i class="fas fa-file-pdf"></i> 生成季度总结报告</h3>
+            <p>将上述数据导出为 PDF 格式，便于汇报与存档。</p>
+        </div>
+        <button class="btn btn-primary" onclick="alert('PDF 生成功能开发中...')">
+            导出 PDF
+        </button>
+    </div>
+
 </div>
 {% endblock %}
-```
 
----
+{% block scripts %}
+<!-- 引入 Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-### 6. 更新 `app.py` 的路由
-**这一步非常关键**。你需要修改 `app.py` 尾部的路由部分，让 Flask 知道如何跳转到这几个新页面。
+<script>
+    document.addEventListener("DOMContentLoaded", loadStats);
 
-请在 `app.py` 中找到 `@app.route("/")` 附近，添加以下代码：
+    async function loadStats() {
+        try {
+            const resp = await fetch("/api/stats");
+            const data = await resp.json();
 
-```python
-# =================== 路由 (更新版) ===================
-@app.route("/")
-def index():
-    return render_template("index.html")
+            // 1. 填充数字
+            document.getElementById("totalScans").innerText = data.total_scans;
+            document.getElementById("totalVulns").innerText = data.total_vulns;
+            
+            // 简单计算一个趣味性的“安全评分” (满分100，每发现一个漏洞扣分，最低0分)
+            let score = 100 - (data.total_vulns * 2); 
+            if (data.total_scans > 0) score = 100 - (data.total_vulns / data.total_scans * 5); // 平均每项目漏洞扣分
+            if (score < 0) score = 0;
+            if (data.total_scans === 0) score = 100; // 无扫描默认满分
+            
+            const scoreElem = document.getElementById("securityScore");
+            scoreElem.innerText = Math.round(score);
+            if(score < 60) scoreElem.style.color = "#e74c3c";
+            else if(score < 80) scoreElem.style.color = "#f39c12";
+            else scoreElem.style.color = "#27ae60";
 
-@app.route("/generator")
-def generator():
-    return render_template("generator.html")
+            // 2. 渲染饼图 (Severity)
+            const ctxPie = document.getElementById('severityChart').getContext('2d');
+            new Chart(ctxPie, {
+                type: 'doughnut',
+                data: {
+                    labels: ['严重 (Error)', '警告 (Warning)', '提示 (Note)'],
+                    datasets: [{
+                        data: [
+                            data.severity_dist.error, 
+                            data.severity_dist.warning, 
+                            data.severity_dist.note
+                        ],
+                        backgroundColor: ['#e74c3c', '#f39c12', '#2ecc71'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
 
-@app.route("/reports")
-def reports():
-    return render_template("reports.html")
+            // 3. 渲染柱状图 (Top Vulns)
+            const ctxBar = document.getElementById('vulnTypeChart').getContext('2d');
+            new Chart(ctxBar, {
+                type: 'bar',
+                data: {
+                    labels: data.top_vulns_chart.labels,
+                    datasets: [{
+                        label: '出现次数',
+                        data: data.top_vulns_chart.data,
+                        backgroundColor: '#3498db',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, ticks: { precision: 0 } }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
 
-@app.route("/profile")
-def profile():
-    return render_template("profile.html")
+        } catch (e) {
+            console.error("加载统计失败", e);
+        }
+    }
+</script>
+{% endblock %}
