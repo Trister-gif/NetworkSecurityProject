@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}首页 - 代码审计{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- 欢迎/标题区 -->
+    <div class="page-header">
+        <h1><i class="fas fa-code"></i> 开始新的代码审计</h1>
+        <p class="subtitle">上传源代码包，自动化检测安全漏洞</p>
+    </div>
+
+    <!-- 审计配置卡片 -->
+    <div class="audit-card">
+        <form id="analyzeForm">
+            <div class="form-grid">
+                <!-- 选项 1 -->
+                <div class="form-group">
+                    <label for="language"><i class="fas fa-language"></i> 目标语言</label>
+                    <select name="language" id="language" class="form-control">
+                        <option value="python">Python</option>
+                        <option value="java">Java</option>
+                        <option value="javascript">JavaScript / TypeScript</option>
+                        <option value="cpp">C / C++</option>
+                        <option value="csharp">C#</option>
+                        <option value="go">Go</option>
+                    </select>
+                </div>
+
+                <!-- 选项 2 -->
+                <div class="form-group">
+                    <label for="suite"><i class="fas fa-cubes"></i> 查询规则集</label>
+                    <select name="suite" id="suite" class="form-control">
+                        <option value="security-and-quality">Security & Quality (推荐)</option>
+                        <option value="code-scanning">Code Scanning (快速)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 文件上传区 -->
+            <div class="upload-area" id="dropZone">
+                <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                <p>点击上传或拖拽 ZIP/源码文件到此处</p>
+                <input type="file" name="file" id="file" class="file-input">
+                <div id="fileNameDisplay"></div>
+            </div>
+
+            <!-- 提交按钮 -->
+            <button type="submit" class="btn btn-primary btn-lg btn-block">
+                <i class="fas fa-play"></i> 启动分析引擎
+            </button>
+        </form>
+
+        <!-- 加载状态 -->
+        <div id="spinner" class="loading-state" style="display:none;">
+            <div class="spinner-icon"></div>
+            <p>正在构建数据库并分析漏洞，请耐心等待...</p>
+        </div>
+    </div>
+
+    <!-- 结果展示区 -->
+    <div id="resultArea" class="result-card" style="display:none;">
+        <div class="result-header">
+            <h2>审计结果</h2>
+            <div class="result-actions">
+                <span id="statusMsg"></span>
+                <a id="downloadLink" href="#" class="btn btn-secondary btn-sm" download>
+                    <i class="fas fa-download"></i> 下载 SARIF 报告
+                </a>
+            </div>
+        </div>
+        
+        <div class="table-responsive">
+            <table id="resultsTable" class="audit-table">
+                <thead>
+                    <tr>
+                        <th width="15%">规则 ID</th>
+                        <th width="10%">严重性</th>
+                        <th width="30%">文件路径</th>
+                        <th width="10%">行号</th>
+                        <th width="35%">详细信息</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- JS 将在这里插入数据 -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- 这里我们将引入原本 index.html 下方的 JS 逻辑 -->
+<!-- 为了保持整洁，建议之后将 JS 移入 static/script.js，但现在先保留在 HTML 里 -->
+<script>
+    // 简单的文件上传文件名显示逻辑
+    document.getElementById('file').addEventListener('change', function(e){
+        const fileName = e.target.files[0]?.name;
+        if(fileName) document.getElementById('fileNameDisplay').textContent = "已选择: " + fileName;
+    });
+
+    // === 原有的 AJAX 逻辑 (适配了新的 Class/ID) ===
+    const form = document.getElementById("analyzeForm");
+    const spinner = document.getElementById("spinner");
+    const resultArea = document.getElementById("resultArea");
+    const tableBody = document.querySelector("#resultsTable tbody");
+    const statusMsg = document.getElementById("statusMsg");
+    const downloadLink = document.getElementById("downloadLink");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      resultArea.style.display = "none";
+      tableBody.innerHTML = "";
+      statusMsg.textContent = "";
+
+      const fileInput = document.getElementById("file");
+      if (!fileInput.files.length) {
+        alert("请选择要上传的文件（源代码或 zip）");
+        return;
+      }
+
+      spinner.style.display = "block";
+      const fd = new FormData();
+      fd.append("language", document.getElementById("language").value);
+      fd.append("file", fileInput.files[0]);
+
+      try {
+        const resp = await fetch("/api/analyze", { method: "POST", body: fd });
+        const data = await resp.json();
+        spinner.style.display = "none";
+
+        if (!resp.ok) {
+          alert("错误: " + (data.message || "分析失败"));
+          return;
+        }
+
+        // success
+        resultArea.style.display = "block";
+        statusMsg.textContent = `✅ 发现 ${data.results.length} 个潜在问题`;
+        downloadLink.href = "/results/" + data.sarif_file;
+
+        // fill table
+        tableBody.innerHTML = "";
+        for (const r of data.results || []) {
+          const tr = document.createElement("tr");
+          // 适配不同等级的颜色
+          const levelLower = (r.level || r.severity || "").toLowerCase();
+          let badgeClass = "badge-info";
+          if (levelLower.includes("error")) badgeClass = "badge-error";
+          if (levelLower.includes("warn")) badgeClass = "badge-warning";
+
+          tr.innerHTML = `<td><span class="code-font">${escapeHtml(r.rule)}</span></td>
+                          <td><span class="badge ${badgeClass}">${escapeHtml(r.level || r.severity)}</span></td>
+                          <td><span class="file-path" title="${escapeHtml(r.file)}">${escapeHtml(r.file)}</span></td>
+                          <td>${escapeHtml(r.line)}</td>
+                          <td>${escapeHtml(r.message)}</td>`;
+          tableBody.appendChild(tr);
+        }
+      } catch (err) {
+        spinner.style.display = "none";
+        alert("网络错误: " + err);
+      }
+    });
+
+    function escapeHtml(s) {
+      if (!s && s !== 0) return "";
+      return String(s).replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]; });
+    }
+</script>
+{% endblock %}

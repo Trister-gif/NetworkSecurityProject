@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+
+{% block title %}智能规则生成{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <h1><i class="fas fa-magic"></i> AI 规则生成器</h1>
+        <p class="subtitle">描述你想要检测的漏洞，AI Agent 将为你编写 CodeQL 查询语句</p>
+    </div>
+
+    <!-- 1. 初始需求卡片 -->
+    <div class="card input-card" id="initialCard">
+        <div class="card-header-flex">
+            <h3><i class="fas fa-pen-nib"></i> 初始定义</h3>
+            
+            <!-- 重新开始按钮 -->
+            <button id="resetBtn" class="btn btn-sm btn-ghost" onclick="resetGenerator()" style="display:none;">
+                <i class="fas fa-redo-alt"></i> 重新设计
+            </button>
+        </div>
+
+        <form id="initialForm">
+            <div class="form-group">
+                <label>🔍 漏洞类型</label>
+                <input type="text" class="form-control" id="vulnType" 
+                       placeholder="例如：SQL 注入, 硬编码密码, SSRF..." required>
+            </div>
+            <div class="form-group">
+                <label>📝 生成要求</label>
+                <textarea class="form-control" id="requirements" rows="4" 
+                          placeholder="描述具体场景..."></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block" id="generateBtn">
+                <i class="fas fa-play"></i> 开始生成
+            </button>
+        </form>
+    </div>
+
+    <!-- 2. 对话流容器 -->
+    <div id="chatContainer"></div>
+
+    <!-- 3. 底部 Loading -->
+    <div id="globalLoading" class="loading-state" style="display:none;">
+        <div class="spinner-icon"></div>
+        <p>AI 正在思考并编写代码...</p>
+    </div>
+
+    <div style="height: 100px;"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // === 模拟数据 ===
+    const MOCK_CODE_BASE = `/**
+ * @name Generated Rule
+ * @description AI generated CodeQL query
+ * @kind path-problem
+ * @problem.severity error
+ */
+import python
+import semmle.python.security.dataflow.SqlInjection
+
+from SqlInjectionConfiguration config, DataFlow::PathNode source, DataFlow::PathNode sink
+where config.hasFlowPath(source, sink)
+select sink.node, source, sink, "Potential vulnerability here."
+`;
+
+    const chatContainer = document.getElementById('chatContainer');
+    const globalLoading = document.getElementById('globalLoading');
+    const initialForm = document.getElementById('initialForm');
+    const resetBtn = document.getElementById('resetBtn');
+    
+    let turnCount = 0; 
+
+    // 1. 初始提交
+    initialForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        document.getElementById('generateBtn').disabled = true;
+        document.getElementById('vulnType').disabled = true;
+        document.getElementById('requirements').disabled = true;
+        
+        resetBtn.style.display = 'inline-block';
+        resetBtn.classList.add('fade-in');
+
+        startGeneration("初始生成");
+    });
+
+    // 2. 重新开始 (动画版 - 无弹窗)
+    function resetGenerator() {
+        // A. 按钮图标旋转动画 (视觉反馈)
+        const icon = resetBtn.querySelector('i');
+        icon.classList.add('rotate-once');
+
+        // B. 对话流区域淡出下沉
+        chatContainer.classList.add('fade-out-down');
+        
+        // C. 表单区域轻微闪烁，暗示正在重置
+        const card = document.getElementById('initialCard');
+        card.classList.add('flash-reset');
+
+        // D. 等待动画结束后执行真正的清理 (500ms)
+        setTimeout(() => {
+            // 1. 清空内容
+            chatContainer.innerHTML = '';
+            chatContainer.classList.remove('fade-out-down'); // 移除类以便下次显示
+            
+            turnCount = 0;
+
+            // 2. 重置表单并解锁
+            const form = document.getElementById('initialForm');
+            form.reset();
+            
+            document.getElementById('generateBtn').disabled = false;
+            document.getElementById('vulnType').disabled = false;
+            document.getElementById('requirements').disabled = false;
+
+            // 3. 移除动画类
+            icon.classList.remove('rotate-once');
+            card.classList.remove('flash-reset');
+
+            // 4. 隐藏重置按钮
+            resetBtn.style.display = 'none';
+
+            // 5. 滚回顶部
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            
+        }, 500); 
+    }
+
+    // 3. 开始生成流程
+    function startGeneration(context) {
+        globalLoading.style.display = 'block';
+        globalLoading.scrollIntoView({ behavior: 'smooth' });
+
+        setTimeout(() => {
+            globalLoading.style.display = 'none';
+            turnCount++;
+            const codeContent = `// [第 ${turnCount} 版] 基于: ${context}\n` + MOCK_CODE_BASE;
+            appendResultCard(codeContent, turnCount);
+        }, 1500);
+    }
+
+    // 4. 追加结果卡片
+    function appendResultCard(code, id) {
+        const cardId = `result-${id}`;
+        
+        const html = `
+        <div class="card result-card fade-in-up" id="${cardId}">
+            <div class="result-header">
+                <h3><i class="fas fa-robot"></i> 生成结果 #${id}</h3>
+                <span class="badge badge-info">AI Generated</span>
+            </div>
+            
+            <div class="code-editor-container">
+                <textarea id="editor-${id}" class="code-editor" readonly>${code}</textarea>
+            </div>
+
+            <div class="action-bar" id="actions-${id}">
+                <div class="left-actions">
+                    <button class="btn btn-secondary" onclick="toggleEdit('${id}')">
+                        <i class="fas fa-edit"></i> 编辑
+                    </button>
+                    <button id="save-btn-${id}" class="btn btn-success" onclick="saveRule('${id}')">
+                        <i class="fas fa-save"></i> 保存规则
+                    </button>
+                </div>
+            </div>
+        </div>
+        `;
+
+        chatContainer.insertAdjacentHTML('beforeend', html);
+        appendRefineInput(id);
+        document.getElementById(cardId).scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    // 5. 追加“追加要求”输入框
+    function appendRefineInput(prevId) {
+        const inputId = `refine-box-${prevId}`;
+        const html = `
+        <div class="refine-container fade-in-up" id="${inputId}">
+            <div class="refine-label"><i class="fas fa-level-down-alt"></i> 对结果不满意？追加要求：</div>
+            <div class="refine-input-group">
+                <textarea class="form-control" id="text-${inputId}" rows="2" placeholder="例如：请排除 test 文件夹..."></textarea>
+                <button class="btn btn-warning" onclick="submitRefine('${prevId}', '${inputId}')">
+                    <i class="fas fa-paper-plane"></i> 发送
+                </button>
+            </div>
+        </div>
+        `;
+        chatContainer.insertAdjacentHTML('beforeend', html);
+    }
+
+    // 6. 提交追加要求
+    function submitRefine(prevId, inputContainerId) {
+        const textArea = document.getElementById(`text-${inputContainerId}`);
+        const feedback = textArea.value.trim();
+        if (!feedback) return alert("请输入具体的要求");
+
+        const prevActions = document.getElementById(`actions-${prevId}`);
+        if (prevActions) prevActions.remove(); 
+        
+        const prevCard = document.getElementById(`result-${prevId}`);
+        prevCard.classList.add('history-card');
+        
+        const inputContainer = document.getElementById(inputContainerId);
+        inputContainer.innerHTML = `
+            <div class="user-message-card">
+                <div class="user-avatar"><i class="fas fa-user"></i></div>
+                <div class="user-content"><strong>追加要求：</strong> ${escapeHtml(feedback)}</div>
+            </div>
+        `;
+
+        startGeneration(feedback);
+    }
+
+    // 工具：切换编辑状态
+    function toggleEdit(id) {
+        const editor = document.getElementById(`editor-${id}`);
+        const saveBtn = document.getElementById(`save-btn-${id}`);
+        
+        if (editor.hasAttribute('readonly')) {
+            editor.removeAttribute('readonly');
+            editor.classList.add('editable');
+            
+            if (saveBtn.classList.contains('btn-saved')) {
+                saveBtn.classList.remove('btn-saved');
+                saveBtn.classList.add('btn-success');
+                saveBtn.innerHTML = '<i class="fas fa-save"></i> 保存规则';
+            }
+        } else {
+            editor.setAttribute('readonly', true);
+            editor.classList.remove('editable');
+        }
+    }
+
+    // 工具：保存规则
+    function saveRule(id) {
+        const btn = document.getElementById(`save-btn-${id}`);
+        const editor = document.getElementById(`editor-${id}`);
+        
+        const originalWidth = btn.offsetWidth;
+        btn.style.width = originalWidth + 'px';
+        
+        btn.disabled = true; 
+        btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> 保存中...';
+        
+        setTimeout(() => {
+            btn.style.width = 'auto'; 
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-saved'); 
+            btn.innerHTML = '<i class="fas fa-check"></i> 已成功保存';
+            btn.disabled = false;
+        }, 800);
+    }
+
+    function escapeHtml(text) {
+        if (!text) return text;
+        return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+</script>
+{% endblock %}
